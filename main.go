@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"github.com/fsnotify/fsnotify"
-	"io/ioutil"
 	corev1 "k8s.io/api/core/v1"
 	"os"
 	"path/filepath"
@@ -19,7 +18,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"strings"
 )
 
 const (
@@ -28,43 +26,11 @@ const (
 
 var (
 	labelDir     = "labels"
-	log	         = logf.Log.WithName(controllerName)
+	log          = logf.Log.WithName(controllerName)
 	watcher      *fsnotify.Watcher
 	watchedDirs  []string
 	nodeLabelMap map[string]map[string]bool
 )
-
-func readLabelsFromFile(path string) []string {
-	fileBytes, err := ioutil.ReadFile(path)
-	if err != nil {
-		return []string{""}
-	}
-
-	return strings.Split(string(fileBytes), "\n")
-}
-
-func pathToLabel(path string) string {
-	// Strip leading 'labels/' from file path
-	return strings.Replace(path, labelDir+"/", "", 1)
-}
-
-func buildLabelMap() (map[string][]string, error) {
-	labelMap := make(map[string][]string)
-
-	err := filepath.Walk(labelDir, func(path string, info os.FileInfo, err error) error {
-		if !info.IsDir() {
-			labelMap[pathToLabel(path)] = readLabelsFromFile(path)
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return labelMap, nil
-}
 
 func remove(slice []string, s int) []string {
 	return append(slice[:s], slice[s+1:]...)
