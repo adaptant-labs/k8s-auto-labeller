@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sync"
 )
 
 const (
@@ -25,11 +26,16 @@ const (
 )
 
 var (
-	labelDir     = "labels"
-	log          = logf.Log.WithName(controllerName)
-	watcher      *fsnotify.Watcher
-	watchedDirs  []string
-	nodeLabelMap map[string]map[string]bool
+	labelDir    = "labels"
+	log         = logf.Log.WithName(controllerName)
+	watcher     *fsnotify.Watcher
+	watchLock   sync.RWMutex
+	watchedDirs []string
+
+	// nodeLabelMap contains the global node label state reflecting set (true) and recently cleared (false) labels
+	// for the reconciler to act on, in the form of node name -> label -> true/false.
+	nodeLabelMap     map[string]map[string]bool
+	nodeLabelMapLock sync.RWMutex
 )
 
 func remove(slice []string, s int) []string {
@@ -54,7 +60,9 @@ func main() {
 	err := filepath.Walk(labelDir, func(path string, info os.FileInfo, err error) error {
 		if info.IsDir() {
 			entryLog.Info("Adding watcher", "dir", path)
+			watchLock.Lock()
 			watchedDirs = append(watchedDirs, path)
+			watchLock.Unlock()
 			_ = watcher.Add(path)
 		}
 		return nil
@@ -88,6 +96,9 @@ func main() {
 			name := e.Meta.GetName()
 			nodeLabels := e.Meta.GetLabels()
 
+			nodeLabelMapLock.Lock()
+			defer nodeLabelMapLock.Unlock()
+
 			nodeLabelMap[name] = make(map[string]bool)
 			for label := range nodeLabels {
 				for labelKey, fileLabels := range labelMap {
@@ -107,7 +118,9 @@ func main() {
 			return false
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
+			nodeLabelMapLock.Lock()
 			delete(nodeLabelMap, e.Meta.GetName())
+			nodeLabelMapLock.Unlock()
 			return false
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
@@ -119,6 +132,8 @@ func main() {
 
 			eq := reflect.DeepEqual(oldLabels, newLabels)
 			if !eq {
+				nodeLabelMapLock.Lock()
+
 				// Disable any previously set labels, the reconciler will use this to clear stale node labels
 				for k := range nodeLabelMap[oldName] {
 					nodeLabelMap[oldName][k] = false
@@ -140,6 +155,7 @@ func main() {
 					}
 				}
 
+				nodeLabelMapLock.Unlock()
 				return true
 			}
 
@@ -175,10 +191,13 @@ func main() {
 					info, _ := os.Stat(evt.Name)
 					if info.IsDir() {
 						entryLog.Info("adding watcher", "dir", evt.Name)
+						watchLock.Lock()
 						watchedDirs = append(watchedDirs, evt.Name)
+						watchLock.Unlock()
 						_ = watcher.Add(evt.Name)
 					}
 				} else if evt.Op&fsnotify.Remove == fsnotify.Remove {
+					watchLock.Lock()
 					for iter, dir := range watchedDirs {
 						if dir == evt.Name {
 							entryLog.Info("removing watcher", "dir", evt.Name)
@@ -186,6 +205,7 @@ func main() {
 							watchedDirs = remove(watchedDirs, iter)
 						}
 					}
+					watchLock.Unlock()
 				}
 
 				labelMap, _ = buildLabelMap()
