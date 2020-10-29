@@ -59,6 +59,12 @@ func main() {
 	watchedDirs = make([]string, 0)
 	watcher, _ = fsnotify.NewWatcher()
 	defer watcher.Close()
+
+	if _, err := os.Stat(labelDir); os.IsNotExist(err) {
+		entryLog.Error(err, "invalid label directory specified")
+		os.Exit(1)
+	}
+
 	err := filepath.Walk(labelDir, func(path string, info os.FileInfo, err error) error {
 		if info.IsDir() {
 			entryLog.Info("Adding watcher", "dir", path)
@@ -67,18 +73,26 @@ func main() {
 			watchLock.Unlock()
 			_ = watcher.Add(path)
 		}
+
 		return nil
 	})
+
+	if err != nil {
+		entryLog.Error(err, "unable to scan label dir")
+		os.Exit(1)
+	}
 
 	nodeLabelMap = make(map[string]map[string]bool)
 
 	labelMap, err := buildLabelMap()
 	if err != nil {
-		panic(err)
+		entryLog.Error(err, "unable to build label map")
+		os.Exit(1)
 	}
 
 	mgr, err := manager.New(config.GetConfigOrDie(), manager.Options{})
 	if err != nil {
+		entryLog.Error(err, "unable to instantiate manager")
 		os.Exit(1)
 	}
 
@@ -88,6 +102,7 @@ func main() {
 			log:    log.WithName("reconciler"),
 		},
 	})
+
 	if err != nil {
 		entryLog.Error(err, "unable to set up individual controller")
 		os.Exit(1)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -36,6 +37,10 @@ func buildLabelMap() (map[string][]string, error) {
 
 	if err != nil {
 		return nil, err
+	}
+
+	if len(labelMap) == 0 {
+		return nil, errors.New("no labels found")
 	}
 
 	return labelMap, nil
