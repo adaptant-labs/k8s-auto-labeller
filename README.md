@@ -79,9 +79,15 @@ beta.devicetree.org/fsl-imx8mq-phanbell
 
 will automatically apply the `sodalite.eu/edgetpu` label to any nodes that contain any of the labels in the label file.
 
-The `labels/` directory (or any other label-containing directory specified) is monitored for changes, such that any
-newly created or removed labels or namespaces will be automatically propagated across the cluster at run-time, without
-the need to restart the controller.
+The `labels/` directory (or any other label-containing directory specified with `-label-dir`) is monitored for changes,
+such that any newly created or removed labels or namespaces will be automatically propagated across the cluster at
+run-time, without the need to restart the controller.
+
+### Label Volumes
+
+If planning to use an external volume for label definitions, these can be passed in to the container via a Docker volume
+under the `/labels` mount point. Note that the contents of the `labels/` directory will already be exposed as a
+persisted volume when the container is first run.
 
 ## Features and bugs
 
