@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	nodeName = "node"
+	nodeName  = "node"
 	labelName = "label"
 )
 

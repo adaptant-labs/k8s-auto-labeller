@@ -43,7 +43,7 @@ var (
 
 	// nodeLabelMap contains the global node label state reflecting set (true) and recently cleared (false) labels
 	// for the reconciler to act on, in the form of node name -> label -> true/false.
-	nodeLabelMap  *NodeLabelMap
+	nodeLabelMap *NodeLabelMap
 )
 
 func init() {
@@ -182,7 +182,7 @@ func main() {
 				// Kick-off node reconciliation
 				c.Reconcile(reconcile.Request{
 					NamespacedName: types.NamespacedName{
-						Name: node.Name,
+						Name:      node.Name,
 						Namespace: node.Namespace,
 					},
 				})
