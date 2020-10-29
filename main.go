@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/fsnotify/fsnotify"
+	"github.com/spf13/afero"
 	corev1 "k8s.io/api/core/v1"
 	"os"
 	"path/filepath"
@@ -26,6 +27,8 @@ const (
 )
 
 var (
+	appfs       afero.Fs
+	fsutil      *afero.Afero
 	labelDir    = "labels"
 	log         = logf.Log.WithName(controllerName)
 	watcher     *fsnotify.Watcher
@@ -40,6 +43,11 @@ var (
 
 func remove(slice []string, s int) []string {
 	return append(slice[:s], slice[s+1:]...)
+}
+
+func init() {
+	appfs = afero.NewOsFs()
+	fsutil = &afero.Afero{Fs: appfs}
 }
 
 func main() {

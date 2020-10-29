@@ -2,14 +2,13 @@ package main
 
 import (
 	"errors"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
 func readLabelsFromFile(path string) []string {
-	fileBytes, err := ioutil.ReadFile(path)
+	fileBytes, err := fsutil.ReadFile(path)
 	if err != nil {
 		return []string{""}
 	}
