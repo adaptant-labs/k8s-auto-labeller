@@ -1,5 +1,9 @@
 # Kubernetes Node Auto Labeller
 
+[![Build Status](https://travis-ci.com/adaptant-labs/k8s-auto-labeller.svg?branch=master)](https://travis-ci.com/adaptant-labs/k8s-auto-labeller)
+[![Go Report Card](https://goreportcard.com/badge/github.com/adaptant-labs/k8s-auto-labeller)](https://goreportcard.com/report/github.com/adaptant-labs/k8s-auto-labeller)
+[![Docker Pulls](https://img.shields.io/docker/pulls/adaptant/k8s-auto-labeller.svg)](https://hub.docker.com/repository/docker/adaptant/k8s-auto-labeller)
+
 Kubernetes controller for automatically applying node labels when dependent labels are defined.
 
 ## Motivation
