@@ -17,10 +17,12 @@ func readLabelsFromFile(path string) []string {
 }
 
 func pathToLabel(path string) string {
-	// Strip leading 'labels/' from file path
+	// Strip leading label directory (defaults to 'labels/') from the file path
 	return strings.Replace(path, labelDir+"/", "", 1)
 }
 
+// Construct a label map in the form of label: [dependent labels...] gleaned
+// from the filesystem
 func buildLabelMap() (map[string][]string, error) {
 	labelMap := make(map[string][]string)
 

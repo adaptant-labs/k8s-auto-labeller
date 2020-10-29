@@ -43,9 +43,11 @@ func remove(slice []string, s int) []string {
 }
 
 func main() {
+	flag.StringVar(&labelDir, "label-dir", labelDir, "Label directory to monitor")
+
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Node Auto Labeller for Kubernetes")
-		fmt.Fprintf(os.Stderr, "Usage: %s [flags]", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Node Auto Labeller for Kubernetes\n")
+		fmt.Fprintf(os.Stderr, "Usage: %s [flags]\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 
