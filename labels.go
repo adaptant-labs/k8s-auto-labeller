@@ -23,7 +23,7 @@ func pathToLabel(path string) string {
 
 // Construct a label map in the form of label: [dependent labels...] gleaned
 // from the filesystem
-func buildLabelMap() (map[string][]string, error) {
+func buildPossibleLabelMap() (map[string][]string, error) {
 	labelMap := make(map[string][]string)
 
 	err := filepath.Walk(labelDir, func(path string, info os.FileInfo, err error) error {

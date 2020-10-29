@@ -40,7 +40,7 @@ func TestReadLabelsFromFile(t *testing.T) {
 }
 
 func TestBuildLabelMap(t *testing.T) {
-	labelMap, err := buildLabelMap()
+	labelMap, err := buildPossibleLabelMap()
 	if err != nil {
 		t.Error("unexpected error:", err.Error())
 		return
@@ -53,10 +53,8 @@ func TestBuildLabelMap(t *testing.T) {
 }
 
 func TestPathToLabel(t *testing.T) {
-	testFile := "test"
-	testPath := fmt.Sprintf("%s/%s", labelDir, testFile)
-	label := pathToLabel(testPath)
-	if label != testFile {
+	label := pathToLabel(testLabelPath)
+	if label != testLabelFile {
 		t.Errorf("unexpected label: %s\n", label)
 	}
 }

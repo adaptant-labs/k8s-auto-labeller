@@ -1,13 +1,15 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
-	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/afero"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"os"
-	"path/filepath"
 	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -17,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sync"
@@ -27,23 +30,21 @@ const (
 )
 
 var (
-	appfs       afero.Fs
-	fsutil      *afero.Afero
-	labelDir    = "labels"
-	log         = logf.Log.WithName(controllerName)
-	watcher     *fsnotify.Watcher
-	watchLock   sync.RWMutex
-	watchedDirs []string
+	appfs    afero.Fs
+	fsutil   *afero.Afero
+	labelDir = "labels"
+	log      = logf.Log.WithName(controllerName)
+
+	// possibleLabelMap contains the global state of all possible labels gleaned from the label dirs. It is dynamically
+	// rebuilt when the filesystem watchers observe changes to the label files. It is implemented in the form of
+	// label: [dependendent labels...]
+	possibleLabelMap  map[string][]string
+	possibleLabelLock sync.RWMutex
 
 	// nodeLabelMap contains the global node label state reflecting set (true) and recently cleared (false) labels
 	// for the reconciler to act on, in the form of node name -> label -> true/false.
-	nodeLabelMap     map[string]map[string]bool
-	nodeLabelMapLock sync.RWMutex
+	nodeLabelMap  *NodeLabelMap
 )
-
-func remove(slice []string, s int) []string {
-	return append(slice[:s], slice[s+1:]...)
-}
 
 func init() {
 	appfs = afero.NewOsFs()
@@ -64,41 +65,25 @@ func main() {
 	logf.SetLogger(zap.New(zap.UseDevMode(false)))
 	entryLog := log.WithName("entrypoint")
 
-	watchedDirs = make([]string, 0)
-	watcher, _ = fsnotify.NewWatcher()
-	defer watcher.Close()
-
-	if _, err := os.Stat(labelDir); os.IsNotExist(err) {
-		entryLog.Error(err, "invalid label directory specified")
-		os.Exit(1)
-	}
-
-	err := filepath.Walk(labelDir, func(path string, info os.FileInfo, err error) error {
-		if info.IsDir() {
-			entryLog.Info("Adding watcher", "dir", path)
-			watchLock.Lock()
-			watchedDirs = append(watchedDirs, path)
-			watchLock.Unlock()
-			_ = watcher.Add(path)
-		}
-
-		return nil
-	})
-
+	labelWatcher, err := NewLabelWatcher(labelDir)
 	if err != nil {
-		entryLog.Error(err, "unable to scan label dir")
+		entryLog.Error(err, "failed to initialize label watcher")
 		os.Exit(1)
 	}
+	defer labelWatcher.Close()
 
-	nodeLabelMap = make(map[string]map[string]bool)
+	nodeLabelMap = NewNodeLabelMap()
 
-	labelMap, err := buildLabelMap()
+	possibleLabelMap, err = buildPossibleLabelMap()
 	if err != nil {
-		entryLog.Error(err, "unable to build label map")
+		entryLog.Error(err, "unable to build initial label map")
 		os.Exit(1)
 	}
 
-	mgr, err := manager.New(config.GetConfigOrDie(), manager.Options{})
+	cfg := config.GetConfigOrDie()
+	clientset := kubernetes.NewForConfigOrDie(cfg)
+
+	mgr, err := manager.New(cfg, manager.Options{})
 	if err != nil {
 		entryLog.Error(err, "unable to instantiate manager")
 		os.Exit(1)
@@ -121,31 +106,18 @@ func main() {
 			name := e.Meta.GetName()
 			nodeLabels := e.Meta.GetLabels()
 
-			nodeLabelMapLock.Lock()
-			defer nodeLabelMapLock.Unlock()
+			nodeLabelMap.Lock()
+			defer nodeLabelMap.Unlock()
 
-			nodeLabelMap[name] = make(map[string]bool)
-			for label := range nodeLabels {
-				for labelKey, fileLabels := range labelMap {
-					for _, fileLabel := range fileLabels {
-						if fileLabel == label {
-							nodeLabelMap[name][labelKey] = true
-							break
-						}
-					}
-				}
-			}
+			nodeLabelMap.Add(name)
+			nodeLabelMap.SetPossible(name, nodeLabels)
 
-			if _, ok := nodeLabelMap[name]; ok {
-				return len(nodeLabelMap[name]) > 0
-			}
-
-			return false
+			return nodeLabelMap.Valid(name)
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
-			nodeLabelMapLock.Lock()
-			delete(nodeLabelMap, e.Meta.GetName())
-			nodeLabelMapLock.Unlock()
+			nodeLabelMap.Lock()
+			nodeLabelMap.Remove(e.Meta.GetName())
+			nodeLabelMap.Unlock()
 			return false
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
@@ -157,30 +129,13 @@ func main() {
 
 			eq := reflect.DeepEqual(oldLabels, newLabels)
 			if !eq {
-				nodeLabelMapLock.Lock()
+				nodeLabelMap.Lock()
 
-				// Disable any previously set labels, the reconciler will use this to clear stale node labels
-				for k := range nodeLabelMap[oldName] {
-					nodeLabelMap[oldName][k] = false
-				}
+				nodeLabelMap.ResetLabels(oldName)
+				nodeLabelMap.Add(newName)
+				nodeLabelMap.SetPossible(newName, newLabels)
 
-				if _, exists := nodeLabelMap[newName]; !exists {
-					nodeLabelMap[newName] = make(map[string]bool)
-				}
-
-				// Identify labels to set
-				for label := range newLabels {
-					for labelKey, fileLabels := range labelMap {
-						for _, fileLabel := range fileLabels {
-							if fileLabel == label {
-								nodeLabelMap[newName][labelKey] = true
-								break
-							}
-						}
-					}
-				}
-
-				nodeLabelMapLock.Unlock()
+				nodeLabelMap.Unlock()
 				return true
 			}
 
@@ -197,6 +152,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	done := make(chan bool)
+	refresh := make(chan bool)
+
 	go func() {
 		entryLog.Info("starting manager")
 		if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
@@ -205,40 +163,33 @@ func main() {
 		}
 	}()
 
-	done := make(chan bool)
+	go labelWatcher.Watch(done, refresh)
 
-	go func() {
-		entryLog.Info("Monitoring filesystem for events...")
-		for {
-			select {
-			case evt := <-watcher.Events:
-				if evt.Op&fsnotify.Create == fsnotify.Create {
-					info, _ := os.Stat(evt.Name)
-					if info.IsDir() {
-						entryLog.Info("adding watcher", "dir", evt.Name)
-						watchLock.Lock()
-						watchedDirs = append(watchedDirs, evt.Name)
-						watchLock.Unlock()
-						_ = watcher.Add(evt.Name)
-					}
-				} else if evt.Op&fsnotify.Remove == fsnotify.Remove {
-					watchLock.Lock()
-					for iter, dir := range watchedDirs {
-						if dir == evt.Name {
-							entryLog.Info("removing watcher", "dir", evt.Name)
-							_ = watcher.Remove(evt.Name)
-							watchedDirs = remove(watchedDirs, iter)
-						}
-					}
-					watchLock.Unlock()
-				}
+	for {
+		select {
+		case <-refresh:
+			entryLog.Info("Refreshing node labels")
+			nodeList, _ := clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
+			for _, node := range nodeList.Items {
+				nodeLabelMap.Lock()
 
-				labelMap, _ = buildLabelMap()
-			case err := <-watcher.Errors:
-				entryLog.Error(err, "received filesystem watcher error")
+				nodeLabelMap.ResetLabels(node.Name)
+				nodeLabelMap.Add(node.Name)
+				nodeLabelMap.SetPossible(node.Name, node.Labels)
+
+				nodeLabelMap.Unlock()
+
+				// Kick-off node reconciliation
+				c.Reconcile(reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name: node.Name,
+						Namespace: node.Namespace,
+					},
+				})
 			}
+		case <-done:
+			entryLog.Info("Exiting..")
+			return
 		}
-	}()
-
-	<-done
+	}
 }

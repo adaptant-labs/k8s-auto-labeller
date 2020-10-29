@@ -37,23 +37,23 @@ func (r *reconcileNodeLabels) Reconcile(request reconcile.Request) (reconcile.Re
 		return reconcile.Result{}, err
 	}
 
-	nodeLabelMapLock.Lock()
+	nodeLabelMap.Lock()
 
 	// Reconcile an individual node's labels with its defined state in the node label map.
 	// As the node label map may be updated for cleared labels, this must be called with the
 	// label map's write lock held.
-	for label, set := range nodeLabelMap[request.Name] {
+	for label, set := range nodeLabelMap.GetLabels(request.Name) {
 		if set {
 			log.Info("Setting label", "label", label)
 			node.Labels[label] = "true"
 		} else {
 			log.Info("Clearing label", "label", label)
 			delete(node.Labels, label)
-			delete(nodeLabelMap[request.Name], label)
+			nodeLabelMap.RemoveLabelFromNode(request.Name, label)
 		}
 	}
 
-	nodeLabelMapLock.Unlock()
+	nodeLabelMap.Unlock()
 
 	err = r.client.Update(context.TODO(), node)
 	if err != nil {
