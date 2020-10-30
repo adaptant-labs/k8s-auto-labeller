@@ -150,6 +150,16 @@ NAME                    STATUS   ROLES    AGE    VERSION        LABELS
 sgx-celsius-w550power   Ready    <none>   148d   v1.18.3+k3s1   beta.kubernetes.io/arch=amd64,beta.kubernetes.io/instance-type=k3s,beta.kubernetes.io/os=linux,k3s.io/hostname=sgx-celsius-w550power,k3s.io/internal-ip=192.168.188.92,kubernetes.io/arch=amd64,kubernetes.io/hostname=sgx-celsius-w550power,kubernetes.io/os=linux,node.kubernetes.io/instance-type=k3s
 ```
 
+### Automated Descheduling of Pods
+
+When used in conjunction with the [k8s-node-label-monitor], it is possible to automatically deschedule pods that have been
+scheduled with label dependencies that are no longer satisfied. This can be useful for evicting pods that have a hard
+hardware dependency where it no longer makes sense to keep them running when the hardware is no longer available.
+
+[k8s-node-label-monitor]: https://github.com/adaptant-labs/k8s-node-label-monitor
+
+## Installation
+
 ### Running as a Kubernetes Deployment
 
 An example Deployment configuration for automated cluster-wide node labelling is provided in
@@ -164,13 +174,16 @@ This will create a single Deployment in the cluster under the `kube-system` name
 
 Multi-arch containers are provided, allowing for direct deployment into clusters with both `amd64` and `arm64` nodes.
 
-### Automated Descheduling of Pods
+### Installation via Helm Chart
 
-When used in conjunction with the [k8s-node-label-monitor], it is possible to automatically deschedule pods that have been
-scheduled with label dependencies that are no longer satisfied. This can be useful for evicting pods that have a hard
-hardware dependency where it no longer makes sense to keep them running when the hardware is no longer available.
+Installation is also possible via a provided Helm chart:
 
-[k8s-node-label-monitor]: https://github.com/adaptant-labs/k8s-node-label-monitor
+```
+$ helm repo add adaptant https://adaptant-labs.github.io/charts/adaptant
+$ helm repo update
+$ helm search repo adaptant
+$ helm install --generate-name adaptant/k8s-auto-labeller
+```
 
 ## Features and bugs
 
