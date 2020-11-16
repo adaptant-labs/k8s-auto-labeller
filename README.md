@@ -77,14 +77,14 @@ The auto labeller makes use of a series of flat files that contain dependent lab
 the `labels/` directory, and follow the format of `labels/<namespace>/<label>`. As an example:
 
 ```
-$ cat labels/sodalite.eu/edgetpu 
+$ cat labels/accelerators/edgetpu
 kkohtaka.org/edgetpu
 feature.node.kubernetes.io/usb-fe_1a6e_089a.present
 feature.node.kubernetes.io/pci-0880_1ac1.present
 beta.devicetree.org/fsl-imx8mq-phanbell
 ```
 
-will automatically apply the `sodalite.eu/edgetpu` label to any nodes that contain any of the labels in the label file.
+will automatically apply the `accelerators/edgetpu` label to any nodes that contain any of the labels in the label file.
 
 The `labels/` directory (or any other label-containing directory specified with `-label-dir`) is monitored for changes,
 such that any newly created or removed labels or namespaces will be automatically propagated across the cluster at
@@ -117,7 +117,7 @@ Using a USB-attached EdgeTPU as an example:
 ```
 $ k8s-auto-labeller
 {"level":"info","ts":1604007914.093528,"logger":"k8s-auto-labeller","msg":"Adding watcher","dir":"/labels"}
-{"level":"info","ts":1604007914.0936112,"logger":"k8s-auto-labeller","msg":"Adding watcher","dir":"/labels/sodalite.eu"}
+{"level":"info","ts":1604007914.0936112,"logger":"k8s-auto-labeller","msg":"Adding watcher","dir":"/labels/accelerators"}
 {"level":"info","ts":1604007914.5515614,"logger":"controller-runtime.metrics","msg":"metrics server is starting to listen","addr":":8080"}
 {"level":"info","ts":1604007914.5517762,"logger":"k8s-auto-labeller.watcher","msg":"Monitoring filesystem for events..."}
 {"level":"info","ts":1604007914.5517755,"logger":"k8s-auto-labeller.entrypoint","msg":"starting manager"}
@@ -126,7 +126,7 @@ $ k8s-auto-labeller
 {"level":"info","ts":1604007914.6523216,"logger":"controller","msg":"Starting Controller","controller":"k8s-auto-labeller"}
 {"level":"info","ts":1604007914.65236,"logger":"controller","msg":"Starting workers","controller":"k8s-auto-labeller","worker count":1}
 {"level":"info","ts":1604007914.6525555,"logger":"k8s-auto-labeller.reconciler","msg":"Reconciling node","request":"/sgx-celsius-w550power","node":"sgx-celsius-w550power"}
-{"level":"info","ts":1604007914.6526318,"logger":"k8s-auto-labeller.reconciler","msg":"Setting label","request":"/sgx-celsius-w550power","label":"sodalite.eu/edgetpu"}
+{"level":"info","ts":1604007914.6526318,"logger":"k8s-auto-labeller.reconciler","msg":"Setting label","request":"/sgx-celsius-w550power","label":"accelerators/edgetpu"}
 ...
 ```
 
@@ -135,14 +135,14 @@ The label state can be confirmed by querying the node labels directly:
 ```
 $ kubectl get nodes sgx-celsius-w550power --show-labels
 NAME                    STATUS   ROLES    AGE    VERSION        LABELS
-sgx-celsius-w550power   Ready    <none>   148d   v1.18.3+k3s1   beta.kubernetes.io/arch=amd64,beta.kubernetes.io/instance-type=k3s,beta.kubernetes.io/os=linux,feature.node.kubernetes.io/usb-fe_1a6e_089a.present=true,k3s.io/hostname=sgx-celsius-w550power,k3s.io/internal-ip=192.168.188.92,kubernetes.io/arch=amd64,kubernetes.io/hostname=sgx-celsius-w550power,kubernetes.io/os=linux,node.kubernetes.io/instance-type=k3s,sodalite.eu/edgetpu=true
+sgx-celsius-w550power   Ready    <none>   148d   v1.18.3+k3s1   beta.kubernetes.io/arch=amd64,beta.kubernetes.io/instance-type=k3s,beta.kubernetes.io/os=linux,feature.node.kubernetes.io/usb-fe_1a6e_089a.present=true,k3s.io/hostname=sgx-celsius-w550power,k3s.io/internal-ip=192.168.188.92,kubernetes.io/arch=amd64,kubernetes.io/hostname=sgx-celsius-w550power,kubernetes.io/os=linux,node.kubernetes.io/instance-type=k3s,accelerators/edgetpu=true
 ```
 
 when the device is removed, the label is automatically cleared:
 
 ```
 {"level":"info","ts":1604008598.1130025,"logger":"k8s-auto-labeller.reconciler","msg":"Reconciling node","request":"/sgx-celsius-w550power","node":"sgx-celsius-w550power"}
-{"level":"info","ts":1604008598.1130307,"logger":"k8s-auto-labeller.reconciler","msg":"Clearing label","request":"/sgx-celsius-w550power","label":"sodalite.eu/edgetpu"}
+{"level":"info","ts":1604008598.1130307,"logger":"k8s-auto-labeller.reconciler","msg":"Clearing label","request":"/sgx-celsius-w550power","label":"accelerators/edgetpu"}
 ...
 
 $ kubectl get nodes sgx-celsius-w550power --show-labels
